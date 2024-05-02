@@ -1,0 +1,72 @@
+import os
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model
+from sklearn.metrics import mean_squared_error
+
+# Step 1: Data Preparation
+# Assuming you have downloaded and extracted the dataset into a directory called "food_101"
+data_dir = "food_101"
+
+# Step 2: Define ImageDataGenerator for data augmentation and preprocessing
+datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+# Step 3: Load and preprocess the training and testing datasets using ImageDataGenerator
+train_generator = datagen.flow_from_directory(
+    os.path.join(data_dir, 'train'),
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='categorical'
+)
+
+test_generator = datagen.flow_from_directory(
+    os.path.join(data_dir, 'test'),
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='categorical',
+    shuffle=False
+)
+
+# Step 4: Load pre-trained MobileNetV2 model without top classification layers
+base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# Step 5: Add custom classification layers on top of the pre-trained model
+x = GlobalAveragePooling2D()(base_model.output)
+x = Dense(1024, activation='relu')(x)
+predictions = Dense(len(train_generator.class_indices), activation='softmax')(x)
+
+# Step 6: Create and compile the model
+model = Model(inputs=base_model.input, outputs=predictions)
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Step 7: Train the model
+model.fit(train_generator, epochs=10, validation_data=test_generator)
+
+# Step 8: Model Evaluation
+# Evaluate the model's performance on the testing set
+y_pred = model.predict(test_generator)
+y_true = np.argmax(test_generator.labels, axis=1)
+accuracy = np.mean(y_true == np.argmax(y_pred, axis=1))
+print("Accuracy:", accuracy)
+
+# Step 9: Prediction
+# Use the trained model to predict food items from new images
+# Replace "new_image_path" with the path to the new image
+# new_img = tf.keras.preprocessing.image.load_img("new_image_path", target_size=(224, 224))
+# new_img_array = tf.keras.preprocessing.image.img_to_array(new_img)
+# new_img_array = np.expand_dims(new_img_array, axis=0)
+# prediction = model.predict(new_img_array)
+# predicted_class = np.argmax(prediction)
+# print("Predicted Class:", predicted_class)
